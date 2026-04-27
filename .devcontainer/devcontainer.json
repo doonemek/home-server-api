@@ -1,6 +1,8 @@
 {
     "name": "Home Server API (Kotlin)",
-    "image": "mcr.microsoft.com/devcontainers/java:21",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "api",
+    "workspaceFolder": "/workspaces/home-server-api",
     "customizations": {
         "vscode": {
             "extensions": [
@@ -9,6 +11,5 @@
             ]
         }
     },
-    "forwardPorts": [8080],
-    "postCreateCommand": "java -version"
+    "forwardPorts": [8080]
 }

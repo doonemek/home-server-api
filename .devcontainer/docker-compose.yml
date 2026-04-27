@@ -1,0 +1,7 @@
+services:
+  api:
+    image: mcr.microsoft.com/devcontainers/java:21
+    volumes:
+      # プロジェクトのルートだけを直接マウントする
+      - ..:/workspaces/home-server-api:cached
+    command: sleep infinity

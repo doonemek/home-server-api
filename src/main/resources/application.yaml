@@ -1,6 +1,8 @@
 ktor:
     application:
         modules:
-            - com.example.ApplicationKt.module
+            - net.home.server.ApplicationKt.module
     deployment:
         port: 8080
+server:
+    baseUrl: "https://localhost:8080/v1"
