@@ -49,7 +49,7 @@ fun Route.dataTransferRoutes() {
                 HttpHeaders.ContentDisposition,
                 ContentDisposition.Attachment.withParameter(
                     ContentDisposition.Parameters.FileName,
-                    requestedFile.name
+                    requestedFile.name // 日本語名の場合エラーになるため今後修正が必要
                 ).toString()
             )
             call.respondFile(requestedFile)
