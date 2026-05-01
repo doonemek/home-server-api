@@ -6,6 +6,7 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import java.io.File
 
@@ -221,7 +222,7 @@ fun Route.dataTransferRoutes() {
                                     break
                                 }
                                 logger.warn("Rename failed for file #{} (Attempt {}/3). Retrying...", fileCount, attempt)
-                                if (attempt < 3) Thread.sleep(100)
+                                if (attempt < 3) delay(100)
                             }
 
                             if (!moveSuccessful) {
