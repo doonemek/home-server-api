@@ -110,8 +110,8 @@ fun Route.dataTransferRoutes() {
     }
 
     // POST: アップロード
-    // /v1/file
-    post("/file") {
+    // /v1/files
+    post("/files") {
         // API エンドポイントのクエリパラメータを取得
         val relativePath = call.request.queryParameters["path"]
 
