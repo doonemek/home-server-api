@@ -113,6 +113,7 @@ fun Route.dataTransferRoutes() {
             return@post
         }
 
+        val baseDir = DirectoryConfig.DATA_ROOT.file
         val multipart = call.receiveMultipart(
             formFieldLimit = 5L * 1024L * 1024L * 1024L
         )
@@ -147,7 +148,28 @@ fun Route.dataTransferRoutes() {
                             logger.warn("WARNING #{}: Not Whitelist", fileCount)
                             warnings.add(mapOf("file" to (fileName ?: "unknown"), "status" to "WARNING", "reason" to "Not Whitelist"))
                         }
+
+                        // 保存先準備
+                        val uploadTempDir = File(baseDir, "upload/$relativePath").apply { if (!exists()) mkdirs() }
+                        val finalDir = File(baseDir, relativePath).apply { if (!exists()) mkdirs() }
+                        val tempFile = File(uploadTempDir, "upload_${fileName}.tmp")
+
+                        try {
+                            // 一時保存
+                            part.streamProvider().use { input ->
+                                tempFile.outputStream().use { output ->
+                                    input.copyTo(output, bufferSize = 128 * 1024)
+                                }
+                            }
+
+                        } catch (e: Exception) {
+                            if (tempFile.exists()) tempFile.delete()
+                            throw e
+                        } finally {
+                            part.dispose()
+                        }
                     }
+                        else -> part.dispose()
                 }
             }
         } catch (e: Exception) {
