@@ -191,7 +191,8 @@ fun Route.dataTransferRoutes() {
                                     "File exceeds 1GB."
                                 )
                                 logger.warn("Blocked #{}: File size exceeds limit ('{}' bytes)", fileCount, tempFile.length())
-                                throw IllegalStateException("Size Limit Exceeded")
+                                // SECURITY_VIOLATION のようなプレフィックスがあると検索しやすい
+                                throw IllegalStateException("Blacklisted extension detected")
                             }
 
                             // 重複回避 (100回)
@@ -208,7 +209,7 @@ fun Route.dataTransferRoutes() {
                                 warnings.add(mapOf(
                                     "file" to fileName,
                                     "status" to "ERROR",
-                                    "reason" to "Duplicate 100 time over"
+                                    "reason" to "Duplicate limit exceeded"
                                 ))
                                 tempFile.delete()
                                 return@forEachPart
