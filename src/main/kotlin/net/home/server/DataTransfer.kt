@@ -219,6 +219,25 @@ fun Route.dataTransferRoutes() {
                         else -> part.dispose()
                 }
             }
+
+            if (fileCount == 0) {
+                call.respondError(
+                    HttpStatusCode.BadRequest,
+                    "no-files",
+                    "No files were uploaded."
+                )
+                return@post
+            }
+
+            logger.info("Upload completed. Total: {} files", fileCount)
+            call.respond(
+                HttpStatusCode.OK,
+                mapOf(
+                    "status" to "success",
+                    "warnings" to warnings
+                )
+            )
+
         } catch (e: IllegalStateException) {
             return@post // 既に respondError 済み
         } catch (e: Exception) {
