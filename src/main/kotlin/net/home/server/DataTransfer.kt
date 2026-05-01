@@ -1,11 +1,26 @@
 package net.home.server
 
 import io.ktor.http.*
+import io.ktor.http.content.*
 import io.ktor.server.application.*
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.home.server.util.respondError
 import java.io.File
+
+// イメージ：バリデーション用の拡張関数案
+suspend fun ApplicationCall.ensureParameterNotBlank(paramName: String, paramValue: String?): String? {
+    if (paramValue.isNullOrBlank()) {
+        respondError(
+            HttpStatusCode.BadRequest,
+            "missing-parameter",
+            "The '$paramName' query parameter is required."
+        )
+        return null
+    }
+    return paramValue
+}
 
 /**
  * データ転送（ダウンロード等）に関するルーティングを定義
@@ -60,5 +75,27 @@ fun Route.dataTransferRoutes() {
                 "The requested file could not be found."
             )
         }
+    }
+
+    // POST: アップロード
+    // /v1/file
+    post("/file") {
+        // API エンドポイントのクエリパラメータを取得
+        val relativePath = call.request.queryParameters["path"]
+
+        // クエリパラメータバリデーションチェック
+        val validPath = call.ensureParameterNotBlank("path", relativePath) ?: return@post
+
+        // 文字列ベースのディレクトリトラバーサル・形式チェック
+        // validation 関数化したいが、現時点ではこのまま利用する
+        if (validPath.contains("..") || validPath.startsWith("/")) {
+            call.respondError(
+                HttpStatusCode.BadRequest,
+                "invalid-path-format",
+                "The 'path' parameter contains invalid characters or is an absolute path."
+            )
+            return@post
+        }
+
     }
 }
