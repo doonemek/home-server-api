@@ -9,6 +9,22 @@ import io.ktor.server.routing.*
 import net.home.server.util.respondError
 import java.io.File
 
+// logger 設定
+private val logger = org.slf4j.LoggerFactory.getLogger("DataTransferRoutes")
+
+// ブラックリストの定義
+private val blacklistedExtensions = setOf(
+    "exe", "msi", "bat", "cmd", "ps1", "vbs",
+    "sh", "bin", "app", "jar", "py", "php", "js"
+)
+
+// ホワイトリストの定義
+private val whitelistedExtensions = setOf(
+    "jpg", "jpeg", "png", "gif", "webp", "mp4",
+    "m4v", "avi", "wmv", "mov", "webm", "mp3",
+    "aac", "wav", "flac", "alac",
+)
+
 // イメージ：バリデーション用の拡張関数案
 suspend fun ApplicationCall.ensureParameterNotBlank(paramName: String, paramValue: String?): String? {
     if (paramValue.isNullOrBlank()) {
@@ -97,5 +113,52 @@ fun Route.dataTransferRoutes() {
             return@post
         }
 
+        val multipart = call.receiveMultipart(
+            formFieldLimit = 5L * 1024L * 1024L * 1024L
+        )
+        val warnings = mutableListOf<Map<String, String>>()
+        var fileCount = 0
+
+        logger.info("Upload request received. Destination: '{}'", relativePath)
+        try {
+            multipart.forEachPart { part ->
+                when (part) {
+                    is PartData.FileItem -> {
+                        fileCount++
+                        val fileName = part.originalFileName ?: "unknown"
+                        val extension = fileName.substringAfterLast(".", "").lowercase()
+
+                        logger.info("Processing file #{} (extension: '.{}')", fileCount, extension)
+                        // ブラックリスト確認：該当すれば即座に全体エラー
+                        if (extension in blacklistedExtensions) {
+                            warnings.add(mapOf("file" to (fileName ?: "unknown"), "status" to "REJECTED", "reason" to "Blacklisted Extension"))
+                            logger.warn("Blocked #{}: Prohibited extension '.{}'", fileCount, extension)
+                            call.respondError(
+                                HttpStatusCode.UnsupportedMediaType,
+                                "unsupported-file-type",
+                                "The file has a prohibited extension."
+                            )
+                            part.dispose()
+                            return@forEachPart
+                        }
+
+                        // ホワイトリスト確認
+                        if (extension !in whitelistedExtensions) {
+                            logger.warn("WARNING #{}: Not Whitelist", fileCount)
+                            warnings.add(mapOf("file" to (fileName ?: "unknown"), "status" to "WARNING", "reason" to "Not Whitelist"))
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("Critical error at file #{}: {}", fileCount, e.message)
+            if (!call.response.isCommitted) {
+                call.respondError(
+                    HttpStatusCode.InternalServerError,
+                    "upload-failed",
+                    "An unexpected error occurred."
+                )
+            }
+        }
     }
 }
