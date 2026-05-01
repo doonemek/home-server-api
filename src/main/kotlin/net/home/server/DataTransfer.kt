@@ -6,8 +6,23 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import net.home.server.util.respondError
+import kotlinx.serialization.Serializable
 import java.io.File
+
+import net.home.server.util.respondError
+
+@Serializable
+data class UploadSummary(
+    val total: Int,
+    val warning_count: Int
+)
+
+@Serializable
+data class UploadResponse(
+    val status: String,
+    val summary: UploadSummary,
+    val detail: List<Map<String, String>>
+)
 
 // logger 設定
 private val logger = org.slf4j.LoggerFactory.getLogger("DataTransferRoutes")
@@ -240,13 +255,18 @@ fun Route.dataTransferRoutes() {
             }
 
             logger.info("Upload completed. Total: {} files", fileCount)
-            call.respond(
-                HttpStatusCode.OK,
-                mapOf(
-                    "status" to "success",
-                    "warnings" to warnings
-                )
+
+            // 正常系レスポンスボディ作成
+            val response = UploadResponse(
+                status = "success",
+                summary = UploadSummary(
+                    total = fileCount,
+                    warning_count = warnings.size
+                ),
+                detail = warnings
             )
+
+            call.respond(HttpStatusCode.OK, response)
 
         } catch (e: IllegalStateException) {
             logger.error("Request terminated expectedly: {}", e.message)
