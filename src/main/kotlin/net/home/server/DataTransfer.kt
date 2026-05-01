@@ -133,7 +133,6 @@ fun Route.dataTransferRoutes() {
                         logger.info("Processing file #{} (extension: '.{}')", fileCount, extension)
                         // ブラックリスト確認：該当すれば即座に全体エラー
                         if (extension in blacklistedExtensions) {
-                            warnings.add(mapOf("file" to (fileName ?: "unknown"), "status" to "REJECTED", "reason" to "Blacklisted Extension"))
                             logger.warn("Blocked #{}: Prohibited extension '.{}'", fileCount, extension)
                             call.respondError(
                                 HttpStatusCode.UnsupportedMediaType,
@@ -141,13 +140,17 @@ fun Route.dataTransferRoutes() {
                                 "The file has a prohibited extension."
                             )
                             part.dispose()
-                            return@forEachPart
+                            throw IllegalStateException("Size Limit Exceeded")
                         }
 
                         // ホワイトリスト確認
                         if (extension !in whitelistedExtensions) {
-                            logger.warn("WARNING #{}: Not Whitelist", fileCount)
-                            warnings.add(mapOf("file" to (fileName ?: "unknown"), "status" to "WARNING", "reason" to "Not Whitelist"))
+                            logger.warn("WARNING #{}: Non-whitelisted file detected", fileCount)
+                            warnings.add(mapOf(
+                                "file" to fileName,
+                                "status" to "WARNING",
+                                "reason" to "Non-whitelisted"
+                            ))
                         }
 
                         // 保存先準備
@@ -185,14 +188,14 @@ fun Route.dataTransferRoutes() {
                             }
 
                             if (counter > 100) {
+                                logger.warn("Skipped #{}: Duplicate naming limit reached (100+)", fileCount)
+                                warnings.add(mapOf(
+                                    "file" to fileName,
+                                    "status" to "ERROR",
+                                    "reason" to "Duplicate 100 time over"
+                                ))
                                 tempFile.delete()
-                                call.respondError(
-                                    HttpStatusCode.Conflict,
-                                    "too-many-duplicates",
-                                    "Too many duplicates."
-                                )
-                                logger.warn("Blocked #{}: Duplicate naming limit reached (100+)", fileCount)
-                                throw IllegalStateException("Duplicate Limit")
+                                return@forEachPart
                             }
 
                             // 移動 (3回リトライ)
@@ -206,7 +209,14 @@ fun Route.dataTransferRoutes() {
                                 if (attempt < 3) Thread.sleep(100)
                             }
 
-                            if (!moveSuccessful) throw Exception("Final rename failed")
+                            if (!moveSuccessful) {
+                                warnings.add(mapOf(
+                                    "file" to fileName,
+                                    "status" to "ERROR",
+                                    "reason" to "Can't move from tmp to request path"
+                                ))
+                                return@forEachPart
+                            }
 
                             logger.info("File #{} saved", fileCount, fileName)
                         } catch (e: Exception) {
@@ -239,6 +249,7 @@ fun Route.dataTransferRoutes() {
             )
 
         } catch (e: IllegalStateException) {
+            logger.error("Request terminated expectedly: {}", e.message)
             return@post // 既に respondError 済み
         } catch (e: Exception) {
             logger.error("Critical error at file #{}: {}", fileCount, e.message)
