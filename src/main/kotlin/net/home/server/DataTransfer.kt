@@ -128,6 +128,7 @@ fun Route.dataTransferRoutes() {
                         fileCount++
                         val fileName = part.originalFileName ?: "unknown"
                         val extension = fileName.substringAfterLast(".", "").lowercase()
+                        val baseName = fileName.substringBeforeLast(".")
 
                         logger.info("Processing file #{} (extension: '.{}')", fileCount, extension)
                         // ブラックリスト確認：該当すれば即座に全体エラー
@@ -194,6 +195,20 @@ fun Route.dataTransferRoutes() {
                                 throw IllegalStateException("Duplicate Limit")
                             }
 
+                            // 移動 (3回リトライ)
+                            var moveSuccessful = false
+                            for (attempt in 1..3) {
+                                if (tempFile.renameTo(finalFile)) {
+                                    moveSuccessful = true
+                                    break
+                                }
+                                logger.warn("Rename failed for file #{} (Attempt {}/3). Retrying...", fileCount, attempt)
+                                if (attempt < 3) Thread.sleep(100)
+                            }
+
+                            if (!moveSuccessful) throw Exception("Final rename failed")
+
+                            logger.info("File #{} saved", fileCount, fileName)
                         } catch (e: Exception) {
                             if (tempFile.exists()) tempFile.delete()
                             throw e
