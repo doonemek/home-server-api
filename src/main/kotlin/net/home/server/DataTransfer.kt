@@ -162,6 +162,38 @@ fun Route.dataTransferRoutes() {
                                 }
                             }
 
+                            // サイズ制限(1GB)
+                            if (tempFile.length() > 1024 * 1024 * 1024) {
+                                tempFile.delete()
+                                call.respondError(
+                                    HttpStatusCode.PayloadTooLarge,
+                                    "file-too-large",
+                                    "File exceeds 1GB."
+                                )
+                                logger.warn("Blocked #{}: File size exceeds limit ('{}' bytes)", fileCount, tempFile.length())
+                                throw IllegalStateException("Size Limit Exceeded")
+                            }
+
+                            // 重複回避 (100回)
+                            var finalFile = File(finalDir, fileName)
+                            var counter = 1
+                            while (finalFile.exists() && counter <= 100) {
+                                val newName = if (extension.isNotEmpty()) "$baseName($counter).$extension" else "$baseName($counter)"
+                                finalFile = File(finalDir, newName)
+                                counter++
+                            }
+
+                            if (counter > 100) {
+                                tempFile.delete()
+                                call.respondError(
+                                    HttpStatusCode.Conflict,
+                                    "too-many-duplicates",
+                                    "Too many duplicates."
+                                )
+                                logger.warn("Blocked #{}: Duplicate naming limit reached (100+)", fileCount)
+                                throw IllegalStateException("Duplicate Limit")
+                            }
+
                         } catch (e: Exception) {
                             if (tempFile.exists()) tempFile.delete()
                             throw e
@@ -172,6 +204,8 @@ fun Route.dataTransferRoutes() {
                         else -> part.dispose()
                 }
             }
+        } catch (e: IllegalStateException) {
+            return@post // 既に respondError 済み
         } catch (e: Exception) {
             logger.error("Critical error at file #{}: {}", fileCount, e.message)
             if (!call.response.isCommitted) {
