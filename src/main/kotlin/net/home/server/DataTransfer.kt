@@ -156,7 +156,8 @@ fun Route.dataTransferRoutes() {
                                 "The file has a prohibited extension."
                             )
                             part.dispose()
-                            throw IllegalStateException("Size Limit Exceeded")
+                            // SECURITY_VIOLATION のようなプレフィックスがあると検索しやすい
+                            throw IllegalStateException("Blacklisted extension detected")
                         }
 
                         // ホワイトリスト確認
@@ -191,8 +192,7 @@ fun Route.dataTransferRoutes() {
                                     "File exceeds 1GB."
                                 )
                                 logger.warn("Blocked #{}: File size exceeds limit ('{}' bytes)", fileCount, tempFile.length())
-                                // SECURITY_VIOLATION のようなプレフィックスがあると検索しやすい
-                                throw IllegalStateException("Blacklisted extension detected")
+                                throw IllegalStateException("Size Limit Exceeded")
                             }
 
                             // 重複回避 (100回)
