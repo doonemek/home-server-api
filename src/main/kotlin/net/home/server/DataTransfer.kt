@@ -10,7 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import java.io.File
 
-import net.home.server.util.respondError
+import net.home.server.util.*
 
 @Serializable
 data class UploadSummary(
@@ -104,14 +104,13 @@ fun Route.dataTransferRoutes() {
 
         // クエリパラメータバリデーションチェック
         val validPath = call.ensureParameterNotBlank("path", relativePath) ?: return@post
-
-        // 文字列ベースのディレクトリトラバーサル・形式チェック
-        // validation 関数化したいが、現時点ではこのまま利用する
-        if (validPath.contains("..") || validPath.startsWith("/")) {
+        val isPathSafe = validPath.split("/").all { it.isValidName() }
+        if (!isPathSafe) {
+            logger.warn("Blocked invalid characters: '{}'", validPath)
             call.respondError(
                 HttpStatusCode.BadRequest,
                 "invalid-path-format",
-                "The 'path' parameter contains invalid characters or is an absolute path."
+                "The 'path' contains invalid characters."
             )
             return@post
         }
@@ -134,6 +133,18 @@ fun Route.dataTransferRoutes() {
                         val baseName = fileName.substringBeforeLast(".")
 
                         logger.info("Processing file #{} (extension: '.{}')", fileCount, extension)
+                        // ファイル名不正チェック
+                        if (!baseName.isValidName()) {
+                            logger.warn("Blocked #{}:  '{}'", fileCount, fileName)
+                            call.respondError(
+                                HttpStatusCode.BadRequest,
+                                "unsupported-file-name",
+                                "The file name contains invalid characters."
+                            )
+                            part.dispose()
+                            throw IllegalStateException("Prohibited file name detected")
+                        }
+
                         // ブラックリスト確認：該当すれば即座に全体エラー
                         if (extension in blacklistedExtensions) {
                             logger.warn("Blocked #{}: Prohibited extension '.{}'", fileCount, extension)
@@ -182,16 +193,9 @@ fun Route.dataTransferRoutes() {
                                 throw IllegalStateException("Size Limit Exceeded")
                             }
 
-                            // 重複回避 (100回)
-                            var finalFile = File(finalDir, fileName)
-                            var counter = 1
-                            while (finalFile.exists() && counter <= 100) {
-                                val newName = if (extension.isNotEmpty()) "$baseName($counter).$extension" else "$baseName($counter)"
-                                finalFile = File(finalDir, newName)
-                                counter++
-                            }
-
-                            if (counter > 100) {
+                            // 重複回避
+                            val finalFile = generateUniqueFile(finalDir, baseName, extension)
+                            if (finalFile == null) {
                                 logger.warn("Skipped #{}: Duplicate naming limit reached (100+)", fileCount)
                                 warnings.add(mapOf(
                                     "file" to fileName,
