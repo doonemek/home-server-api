@@ -28,19 +28,6 @@ data class UploadResponse(
 // logger 設定
 private val logger = org.slf4j.LoggerFactory.getLogger("DataTransferRoutes")
 
-// ブラックリストの定義
-private val blacklistedExtensions = setOf(
-    "exe", "msi", "bat", "cmd", "ps1", "vbs",
-    "sh", "bin", "app", "jar", "py", "php", "js"
-)
-
-// ホワイトリストの定義
-private val whitelistedExtensions = setOf(
-    "jpg", "jpeg", "png", "gif", "webp", "mp4",
-    "m4v", "avi", "wmv", "mov", "webm", "mp3",
-    "aac", "wav", "flac", "alac",
-)
-
 // イメージ：バリデーション用の拡張関数案
 suspend fun ApplicationCall.ensureParameterNotBlank(paramName: String, paramValue: String?): String? {
     if (paramValue.isNullOrBlank()) {
@@ -131,7 +118,7 @@ fun Route.dataTransferRoutes() {
 
         val baseDir = DirectoryConfig.DATA_ROOT.file
         val multipart = call.receiveMultipart(
-            formFieldLimit = 5L * 1024L * 1024L * 1024L
+            formFieldLimit = REQUEST_MAX_FILE_SIZE
         )
         val warnings = mutableListOf<Map<String, String>>()
         var fileCount = 0
@@ -179,12 +166,12 @@ fun Route.dataTransferRoutes() {
                             // 一時保存
                             part.streamProvider().use { input ->
                                 tempFile.outputStream().use { output ->
-                                    input.copyTo(output, bufferSize = 128 * 1024)
+                                    input.copyTo(output, bufferSize = COPY_BUFFER_SIZE)
                                 }
                             }
 
                             // サイズ制限(1GB)
-                            if (tempFile.length() > 1024 * 1024 * 1024) {
+                            if (tempFile.length() > MAX_FILE_SIZE) {
                                 tempFile.delete()
                                 call.respondError(
                                     HttpStatusCode.PayloadTooLarge,
