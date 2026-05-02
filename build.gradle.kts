@@ -1,10 +1,10 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktor)
-    kotlin("plugin.serialization") version "2.0.0" 
+    kotlin("plugin.serialization") version "2.3.0"
 }
 
-group = "com.example"
+group = "net.home.server"
 version = "0.0.1"
 
 application {
