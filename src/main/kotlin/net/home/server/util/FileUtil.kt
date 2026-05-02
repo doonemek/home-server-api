@@ -10,9 +10,11 @@ val blacklistedExtensions = setOf(
 
 // ホワイトリストの定義
 val whitelistedExtensions = setOf(
-    "jpg", "jpeg", "png", "gif", "webp", "mp4",
-    "m4v", "avi", "wmv", "mov", "webm", "mp3",
-    "aac", "wav", "flac", "alac",
+    "jpg", "jpeg", "png", "gif", "webp",
+    "mp4", "m4v", "avi", "wmv", "mov", "webm",
+    "mp3", "aac", "wav", "flac", "alac",
+    "pdf", "doc", "docx", "xlsx", "pptx",
+    "txt", "json"
 )
 
 // Windows 予約語の定義
