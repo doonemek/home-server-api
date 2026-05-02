@@ -6,11 +6,13 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import java.io.File
+import java.text.Normalizer
 
-import net.home.server.util.respondError
+import net.home.server.util.*
 
 @Serializable
 data class UploadSummary(
@@ -27,19 +29,6 @@ data class UploadResponse(
 
 // logger 設定
 private val logger = org.slf4j.LoggerFactory.getLogger("DataTransferRoutes")
-
-// ブラックリストの定義
-private val blacklistedExtensions = setOf(
-    "exe", "msi", "bat", "cmd", "ps1", "vbs",
-    "sh", "bin", "app", "jar", "py", "php", "js"
-)
-
-// ホワイトリストの定義
-private val whitelistedExtensions = setOf(
-    "jpg", "jpeg", "png", "gif", "webp", "mp4",
-    "m4v", "avi", "wmv", "mov", "webm", "mp3",
-    "aac", "wav", "flac", "alac",
-)
 
 // イメージ：バリデーション用の拡張関数案
 suspend fun ApplicationCall.ensureParameterNotBlank(paramName: String, paramValue: String?): String? {
@@ -117,21 +106,20 @@ fun Route.dataTransferRoutes() {
 
         // クエリパラメータバリデーションチェック
         val validPath = call.ensureParameterNotBlank("path", relativePath) ?: return@post
-
-        // 文字列ベースのディレクトリトラバーサル・形式チェック
-        // validation 関数化したいが、現時点ではこのまま利用する
-        if (validPath.contains("..") || validPath.startsWith("/")) {
+        val isPathSafe = validPath.split("/").all { it.isValidName() }
+        if (!isPathSafe) {
+            logger.warn("Blocked invalid characters: '{}'", validPath)
             call.respondError(
                 HttpStatusCode.BadRequest,
                 "invalid-path-format",
-                "The 'path' parameter contains invalid characters or is an absolute path."
+                "The 'path' contains invalid characters."
             )
             return@post
         }
 
         val baseDir = DirectoryConfig.DATA_ROOT.file
         val multipart = call.receiveMultipart(
-            formFieldLimit = 5L * 1024L * 1024L * 1024L
+            formFieldLimit = REQUEST_MAX_FILE_SIZE
         )
         val warnings = mutableListOf<Map<String, String>>()
         var fileCount = 0
@@ -142,11 +130,28 @@ fun Route.dataTransferRoutes() {
                 when (part) {
                     is PartData.FileItem -> {
                         fileCount++
-                        val fileName = part.originalFileName ?: "unknown"
+
+                        // NFC での normalize 処理して文字化け対応
+                        val rawFileName = part.originalFileName ?: "unknown"
+                        val fileName = Normalizer.normalize(rawFileName, Normalizer.Form.NFC)
+
+                        // XXX.yyy をファイル名: XXX, 拡張子: yyy に分割する
                         val extension = fileName.substringAfterLast(".", "").lowercase()
                         val baseName = fileName.substringBeforeLast(".")
 
                         logger.info("Processing file #{} (extension: '.{}')", fileCount, extension)
+                        // ファイル名不正チェック
+                        if (!baseName.isValidName()) {
+                            logger.warn("Blocked #{}:  '{}'", fileCount, fileName)
+                            call.respondError(
+                                HttpStatusCode.BadRequest,
+                                "unsupported-file-name",
+                                "The file name contains invalid characters."
+                            )
+                            part.dispose()
+                            throw IllegalStateException("Prohibited file name detected")
+                        }
+
                         // ブラックリスト確認：該当すれば即座に全体エラー
                         if (extension in blacklistedExtensions) {
                             logger.warn("Blocked #{}: Prohibited extension '.{}'", fileCount, extension)
@@ -177,14 +182,14 @@ fun Route.dataTransferRoutes() {
 
                         try {
                             // 一時保存
-                            part.streamProvider().use { input ->
+                            part.provider().toInputStream().use { input ->
                                 tempFile.outputStream().use { output ->
-                                    input.copyTo(output, bufferSize = 128 * 1024)
+                                    input.copyTo(output, bufferSize = COPY_BUFFER_SIZE)
                                 }
                             }
 
                             // サイズ制限(1GB)
-                            if (tempFile.length() > 1024 * 1024 * 1024) {
+                            if (tempFile.length() > MAX_FILE_SIZE) {
                                 tempFile.delete()
                                 call.respondError(
                                     HttpStatusCode.PayloadTooLarge,
@@ -195,16 +200,9 @@ fun Route.dataTransferRoutes() {
                                 throw IllegalStateException("Size Limit Exceeded")
                             }
 
-                            // 重複回避 (100回)
-                            var finalFile = File(finalDir, fileName)
-                            var counter = 1
-                            while (finalFile.exists() && counter <= 100) {
-                                val newName = if (extension.isNotEmpty()) "$baseName($counter).$extension" else "$baseName($counter)"
-                                finalFile = File(finalDir, newName)
-                                counter++
-                            }
-
-                            if (counter > 100) {
+                            // 重複回避
+                            val finalFile = generateUniqueFile(finalDir, baseName, extension)
+                            if (finalFile == null) {
                                 logger.warn("Skipped #{}: Duplicate naming limit reached (100+)", fileCount)
                                 warnings.add(mapOf(
                                     "file" to fileName,
@@ -268,7 +266,7 @@ fun Route.dataTransferRoutes() {
                 detail = warnings
             )
 
-            call.respond(HttpStatusCode.OK, response)
+            call.respond(HttpStatusCode.Created , response)
 
         } catch (e: IllegalStateException) {
             logger.error("Request terminated expectedly: {}", e.message)
