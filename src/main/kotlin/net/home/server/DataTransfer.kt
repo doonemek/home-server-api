@@ -265,7 +265,7 @@ fun Route.dataTransferRoutes() {
                 detail = warnings
             )
 
-            call.respond(HttpStatusCode.OK, response)
+            call.respond(HttpStatusCode.Created , response)
 
         } catch (e: IllegalStateException) {
             logger.error("Request terminated expectedly: {}", e.message)
