@@ -9,6 +9,7 @@ import io.ktor.server.routing.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import java.io.File
+import java.text.Normalizer
 
 import net.home.server.util.*
 
@@ -128,7 +129,12 @@ fun Route.dataTransferRoutes() {
                 when (part) {
                     is PartData.FileItem -> {
                         fileCount++
-                        val fileName = part.originalFileName ?: "unknown"
+
+                        // NFC での normalize 処理して文字化け対応
+                        val rawFileName = part.originalFileName ?: "unknown"
+                        val fileName = Normalizer.normalize(rawFileName, Normalizer.Form.NFC)
+
+                        // XXX.yyy をファイル名: XXX, 拡張子: yyy に分割する
                         val extension = fileName.substringAfterLast(".", "").lowercase()
                         val baseName = fileName.substringBeforeLast(".")
 
