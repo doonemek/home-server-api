@@ -4,16 +4,8 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
-import kotlinx.serialization.Serializable
 
-@Serializable
-data class ApiErrorResponse(
-    val type: String,
-    val title: String,
-    val status: Int,
-    val detail: String,
-    val instance: String
-)
+import net.home.server.model.ApiErrorResponse
 
 /**
  * RFC 9457 準拠のエラーレスポンスを返却する拡張関数
@@ -37,4 +29,17 @@ suspend fun ApplicationCall.respondError(
         instance = this.request.uri
     )
     this.respond(status, errorResponse)
+}
+
+// イメージ：バリデーション用の拡張関数案
+suspend fun ApplicationCall.ensureParameterNotBlank(paramName: String, paramValue: String?): String? {
+    if (paramValue.isNullOrBlank()) {
+        respondError(
+            HttpStatusCode.BadRequest,
+            "missing-parameter",
+            "The '$paramName' query parameter is required."
+        )
+        return null
+    }
+    return paramValue
 }
