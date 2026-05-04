@@ -7,18 +7,11 @@ import io.ktor.server.routing.*
 import java.io.File
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.Files
-import java.time.format.DateTimeFormatter
-import java.time.ZoneId
 
 import net.home.server.model.ContentInfo
 import net.home.server.util.*
 
 private val logger = org.slf4j.LoggerFactory.getLogger("FileOperation")
-
-// 共通のフォーマッタ (ISO 8601 / UTC)
-private val dateFormatter = DateTimeFormatter
-    .ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
-    .withZone(ZoneId.of("UTC"))
 
 // 再帰的にファイル構造を構築する関数
 fun getFileTree(file: File, baseDir: File, currentDepth: Int, maxDepth: Int): ContentInfo {
