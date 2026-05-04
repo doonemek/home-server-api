@@ -9,22 +9,9 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.Files
 import java.time.format.DateTimeFormatter
 import java.time.ZoneId
-import kotlinx.serialization.Serializable
 
+import net.home.server.model.ContentInfo
 import net.home.server.util.*
-
-// JSON用のデータ型
-@Serializable
-data class ContentInfo(
-    val name: String,
-    val path: String,
-    val type: String,
-    val size: Long?,
-    val createdAt: String,
-    val updatedAt: String,
-    // val author: String?, 現在仕様が決まっていないため、TODO
-    val children: List<ContentInfo>? = null
-)
 
 private val logger = org.slf4j.LoggerFactory.getLogger("FileOperation")
 
