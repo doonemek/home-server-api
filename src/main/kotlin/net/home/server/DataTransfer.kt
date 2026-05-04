@@ -8,40 +8,15 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import kotlinx.coroutines.delay
-import kotlinx.serialization.Serializable
 import java.io.File
 import java.text.Normalizer
 
+import net.home.server.model.UploadResponse
+import net.home.server.model.UploadSummary
 import net.home.server.util.*
-
-@Serializable
-data class UploadSummary(
-    val total: Int,
-    val warning_count: Int
-)
-
-@Serializable
-data class UploadResponse(
-    val status: String,
-    val summary: UploadSummary,
-    val detail: List<Map<String, String>>
-)
 
 // logger 設定
 private val logger = org.slf4j.LoggerFactory.getLogger("DataTransferRoutes")
-
-// イメージ：バリデーション用の拡張関数案
-suspend fun ApplicationCall.ensureParameterNotBlank(paramName: String, paramValue: String?): String? {
-    if (paramValue.isNullOrBlank()) {
-        respondError(
-            HttpStatusCode.BadRequest,
-            "missing-parameter",
-            "The '$paramName' query parameter is required."
-        )
-        return null
-    }
-    return paramValue
-}
 
 /**
  * データ転送（ダウンロード等）に関するルーティングを定義
@@ -266,7 +241,7 @@ fun Route.dataTransferRoutes() {
                 detail = warnings
             )
 
-            call.respond(HttpStatusCode.Created , response)
+            call.respond(HttpStatusCode.Created, response)
 
         } catch (e: IllegalStateException) {
             logger.error("Request terminated expectedly: {}", e.message)
