@@ -91,11 +91,11 @@ fun Route.fileOperationRoutes() {
 
         // ディレクトリチェック
         if (!requestedDir.exists() || !requestedDir.isDirectory) {
-            logger.error("This `path` not exists: '{}'", requestedDir)
+            logger.error("This `path` does not exist: '{}'", requestedDir)
             call.respondError(
                 HttpStatusCode.NotFound,
                 "not-exist-directory",
-                "This 'path' not exists."
+                "This 'path' does not exist."
             )
             return@get
         }
